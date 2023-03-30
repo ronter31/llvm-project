@@ -121,6 +121,17 @@ static void addCanonicalizerPassWithoutRegionSimplification(
 /// extra costs into account when doing block merging.
 static void addCanonicalizerPassWithoutRegionSimplification(
     mlir::OpPassManager &pm) {
+/// Add MLIR Canonicalizer pass with region simplification disabled.
+/// FIR does not support the promotion of some SSA value to block arguments (or
+/// into arith.select operands) that may be done by mlir block merging in the
+/// region simplification (e.g., !fir.shape<> SSA values are not supported as
+/// block arguments).
+/// Aside from the fir.shape issue, moving some abstract SSA value into block
+/// arguments may have a heavy cost since it forces their code generation that
+/// may be expensive (array temporary). The MLIR pass does not take these
+/// extra costs into account when doing block merging.
+static void addCanonicalizerPassWithoutRegionSimplification(
+    mlir::OpPassManager &pm) {
   mlir::GreedyRewriteConfig config;
   config.enableRegionSimplification = false;
   pm.addPass(mlir::createCanonicalizerPass(config));
@@ -229,6 +240,8 @@ inline void createDefaultFIROptimizerPassPipeline(mlir::PassManager &pm,
       pipelines, addCanonicalizerPassWithoutRegionSimplification));
   pm.addPass(mlir::createInlinerPass(
       pipelines, addCanonicalizerPassWithoutRegionSimplification));
+  pm.addPass(mlir::createInlinerPass(
+      pipelines, addCanonicalizerPassWithoutRegionSimplification));
   pm.addPass(fir::createSimplifyRegionLitePass());
   pm.addPass(mlir::createCSEPass());
 
@@ -252,6 +265,7 @@ inline void createDefaultFIROptimizerPassPipeline(mlir::PassManager &pm,
 inline void createHLFIRToFIRPassPipeline(
     mlir::PassManager &pm, llvm::OptimizationLevel optLevel = defaultOptLevel) {
   if (optLevel.isOptimizingForSpeed())
+    addCanonicalizerPassWithoutRegionSimplification(pm);
     addCanonicalizerPassWithoutRegionSimplification(pm);
   if (optLevel.isOptimizingForSpeed()) {
     addCanonicalizerPassWithoutRegionSimplification(pm);
